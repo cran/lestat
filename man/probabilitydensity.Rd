@@ -1,5 +1,6 @@
 \name{probabilitydensity}
 \alias{probabilitydensity}
+\alias{probabilitydensity.betadistribution}
 \alias{probabilitydensity.default}
 \alias{probabilitydensity.expgamma}
 \alias{probabilitydensity.fdistribution}
@@ -8,6 +9,7 @@
 \alias{probabilitydensity.mnormalgamma}
 \alias{probabilitydensity.mnormal}
 \alias{probabilitydensity.mtdistribution}
+\alias{probabilitydensity.muniformdistribution}
 \alias{probabilitydensity.normalexpgamma}
 \alias{probabilitydensity.normalgamma}
 \alias{probabilitydensity.normal}

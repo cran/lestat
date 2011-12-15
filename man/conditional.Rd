@@ -1,10 +1,13 @@
 \name{conditional}
 \alias{conditional}
 \alias{conditional.default}
+\alias{conditional.binomialbeta}
+\alias{conditional.mdiscretedistribution}
 \alias{conditional.mnormalexpgamma}
 \alias{conditional.mnormalgamma}
 \alias{conditional.mnormal}
 \alias{conditional.mtdistribution}
+\alias{conditional.muniformdistribution}
 \alias{conditional.normalexpgamma}
 \alias{conditional.normalgamma}
 \title{

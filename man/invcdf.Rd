@@ -1,5 +1,6 @@
 \name{invcdf}
 \alias{invcdf}
+\alias{invcdf.betadistribution}
 \alias{invcdf.binomialdistribution}
 \alias{invcdf.default}
 \alias{invcdf.discretedistribution}

@@ -95,6 +95,14 @@ difference.default <- function(object1, object2) {
 print("The difference function is not implemented for this combination of objects.")
 }
 
+compose <- function(object, type, ...) {
+   UseMethod("compose")
+}
+
+compose.default <- function(object, type, ...) {
+   cat("The compose function is not implemented for this object.\n")
+}
+
 linearpredict <- function(object, ...) {
 UseMethod("linearpredict")
 }
@@ -207,9 +215,7 @@ invcdf.discretedistribution <- function(object, val) {
 
 print.discretedistribution <- function(x, ...) {
    cat("A discrete probability distribution.\n")
-   cat("Possible values:\n")
-   print(x$vals)
-   cat("Probabilities:\n")
+   names(x$probs) <- x$vals
    print(x$probs)
 }
 
@@ -225,6 +231,157 @@ summary.discretedistribution <- function(object, ...) {
 
 simulate.discretedistribution <- function(object, nsim = 1, ...) {
    sample(object$vals, nsim, replace = TRUE, prob = object$probs)
+}
+
+compose.discretedistribution <- function(object, type, ...) {
+   if (type!="discretedistribution") 
+      cat("ERROR: Not implemented for this type.\n")
+   else {
+      args <- list(...) 
+      mdiscretedistribution(diag(object$probs)%*%args[[2]], list(X1 = object$vals, X2 = args[[1]]))
+   }
+}
+
+##################################
+## CLASS mdiscretedistribution 
+##################################
+
+mdiscretedistribution <- function(probs, nms=NULL) {
+   if (is.null(dim(probs)))
+      cat("ERROR: The probabilities must be in a matrix or an array.\n")
+   else {
+      if (is.null(nms)) {
+      	 nms <- list()
+         for (i in 1:length(dim(probs))) nms[[i]] <- 1:(dim(probs)[i])
+      }
+      dimnames(probs) <- nms
+      result <- list(vals = nms, probs = probs/sum(probs))
+      class(result) <- c("mdiscretedistribution", "probabilitydistribution")
+      result
+   }
+}
+
+expectation.mdiscretedistribution <- function(object) {
+   if (!is.numeric(unlist(object$vals))) 
+      cat("ERROR: Cannot compute the expectation of this distribution.\n")
+   else {
+      k <- length(dim(object$probs))
+      result <- rep(NA, k)
+      for (i in 1:k) result[i] <- expectation(marginal(object, i))
+      result
+   } 
+}
+
+variance.mdiscretedistribution <- function(object) {
+   if (is.numeric(unlist(object$vals))) {
+      k <- length(dim(object$probs))
+      result <- matrix(NA, k, k)
+      for (i in 1:k) 
+         for (j in 1:k) {
+	    if (i==j) 
+	       result[i,j] <- variance(marginal(object, i))
+            else {
+	       XX <- outer(object$vals[[i]], object$vals[[j]])
+               YY <- apply(object$probs, c(i,j), sum)
+	       result[i,j] <- sum(XX*YY) - expectation(marginal(object, i))*expectation(marginal(object, j))
+            }
+      }
+      result
+   } else     
+      cat("ERROR: Cannot compute the variance when outcomes are non-numeric.\n")
+}
+
+precision.mdiscretedistribution <- function(object) {
+   if (is.numeric(unlist(object$vals)))
+      solve(variance(object))
+   else 
+      cat("ERROR: Cannot compute the precision when outcomes are non-numeric.\n")
+}
+
+probability.mdiscretedistribution <- function(object, val) {
+   k <- length(dim(object$probs))
+   index <- 0
+   for (i in k:1) 
+      index  <- index*dim(object$probs)[i] + (1:dim(object$probs)[i])[object$vals[[i]]==val[i]] - 1
+   object$probs[index+1]
+}
+
+print.mdiscretedistribution <- function(x, ...) {
+   cat("A multivariate discrete probability distribution.\n")
+   print(x$probs)
+}
+
+plot.mdiscretedistribution <- function(x, onlybivariate=FALSE, ...) {
+   if (onlybivariate & length(dim(x$probs))==2) {
+      xx <- x$vals[[1]]
+      if (!is.numeric(xx)) xx <- 1:(length(xx))
+      yy <- x$vals[[2]]
+      if (!is.numeric(yy)) yy <- 1:(length(yy))
+      image(xx, yy, x$probs, xlab="", ylab="")
+   } else {
+      k <- length(dim(x$probs))
+      old.par <- par(no.readonly = TRUE); on.exit(par(old.par))
+      par(mfcol=c(k,k))
+      for (i in 1:k) for (j in 1:k) 
+         if (i==j) plot(marginal(x, i))
+         else plot(marginal(x, c(i,j)), TRUE)
+   }
+}
+
+summary.mdiscretedistribution <- function(object, ...) {
+   print(object)
+}
+
+simulate.mdiscretedistribution <- function(object, nsim = 1, ...) {
+   n <- length(object$probs)
+   k <- length(dim(object$probs))
+   ind <- sample(0:(n-1), nsim, replace = TRUE, prob = object$probs)
+   result <- matrix(NA, nsim, k)
+   for (i in 1:k) {
+      result[,i] <- object$vals[[i]][ind %% dim(object$probs)[i] + 1]
+      ind <- ind %/% dim(object$probs)[i] 
+   }
+   result
+}
+
+marginal.mdiscretedistribution <- function(object, v)
+{
+   object$probs <- apply(object$probs, v, sum)
+   if (length(v)==1) 
+      discretedistribution(object$vals[[v]], object$probs)
+   else
+   {  
+      resultvals <- list()
+      for (i in 1:length(v)) resultvals[[i]] <- object$vals[[v[i]]]
+      object$vals <- resultvals
+      object
+   }
+}
+
+conditional.mdiscretedistribution <- function(object, v, val) 
+{
+   n <- length(object$probs)
+   k <- length(dim(object$probs))
+   index <- rep(TRUE, n)
+   counter <- 1
+   for (i in v) {
+      ind <- (1:dim(object$probs)[i])[object$vals[[i]]==val[counter]] - 1
+      ind2 <- 0:(n-1)
+      if (i>1) ind2 <- ind2%/%prod(dim(object$probs)[1:(i-1)])
+      ind2 <- ind2%%dim(object$probs)[i]
+      index <- index & (ind2==ind)
+      counter <- counter + 1
+   }
+   result <- object$probs[index]
+   dim(result) <- dim(object$probs)[-v]
+   resultvals <- object$vals
+   v <- sort(v, decreasing=TRUE)
+   for (i in v) 
+      resultvals[[i]] <- NULL
+   if (k-length(v)==1) 
+      discretedistribution(resultvals[[1]], result)
+   else 
+      mdiscretedistribution(result, resultvals)
 }
 
 ##################################
@@ -288,6 +445,201 @@ summary.binomialdistribution <- function(object, ...) {
 
 simulate.binomialdistribution <- function(object, nsim = 1, ...) {
    rbinom(nsim, object$ntrials, object$probability)
+}
+
+##################################
+## CLASS betadistribution
+##################################
+
+betadistribution <- function(alpha, beta) {
+      result <- list(alpha=alpha, beta=beta)
+      class(result) <- c("betadistribution", "probabilitydistribution")
+      result
+}
+
+expectation.betadistribution <- function(object) {
+   object$alpha/(object$alpha + object$beta)
+}
+
+variance.betadistribution <- function(object) {
+   object$alpha*object$beta/((object$alpha + object$beta)^2*(object$alpha + object$beta + 1))
+}
+
+precision.betadistribution <- function(object) {
+   1/variance(object)
+}
+
+probabilitydensity.betadistribution <- function(object, val, log=FALSE, normalize=TRUE) {
+   dbeta(val, object$alpha, object$beta)
+}
+
+cdf.betadistribution <- function(object, val) {
+   pbeta(val, object$alpha, object$beta)
+}
+
+invcdf.betadistribution <- function(object, val) {
+   qbinom(val, object$alpha, object$beta)
+}
+
+print.betadistribution <- function(x, ...) {
+   cat("A Beta probability distribution.\n")
+   cat("Alpha ", x$alpha, ", beta ", x$beta, ".\n", sep="")
+}
+
+plot.betadistribution <- function(x, ...) {
+   xx <- (1:999)/1000
+   plot(xx, dbeta(xx, x$alpha, x$beta), type="l", xlab="", ylab="")
+}
+
+summary.betadistribution <- function(object, ...) {
+   cat("A Beta probability distribution.\n")
+   cat("Alpha ", object$alpha, ", beta ", object$beta, ".\n", sep="")
+}
+
+simulate.betadistribution <- function(object, nsim = 1, ...) {
+   rbeta(nsim, object$alpha, object$beta)
+}
+
+##################################
+## CLASS betabinomial
+##################################
+# this is the univariate marginal of the binomialbeta
+
+betabinomial <- function(n, alpha, beta) {
+      result <- list(n=n, alpha=alpha, beta=beta)
+      class(result) <- c("betabinomial", "probabilitydistribution")
+      result
+}
+
+expectation.betabinomial <- function(object) {
+   object$n*object$alpha/(object$alpha + object$beta)
+}
+
+variance.betabinomial <- function(object) {
+   object$n*object$alpha*object$beta*(object$alpha+object$beta+object$n)/
+   ((object$alpha + object$beta)^2*(object$alpha + object$beta + 1))
+}
+
+precision.betabinomial <- function(object) {
+   1/variance(object)
+}
+
+probability.betabinomial <- function(object, val) {
+   gamma(object$n+1)*gamma(object$alpha+val)*gamma(object$n+object$beta-val)*gamma(object$alpha+object$beta)/
+   (gamma(val+1)*gamma(object$n+1-val)*gamma(object$alpha+object$beta+object$n)*gamma(object$alpha)*gamma(object$beta))
+}
+
+cdf.betabinomial <- function(object, val) {
+   sum(probability(object, 0:val))
+}
+
+#invcdf.betabinomial <- function(object, val) {
+#   qbinom(val, object$alpha, object$beta)
+#}
+
+print.betabinomial <- function(x, ...) {
+   cat("A Betabinomial probability distribution.\n")
+   cat("n ", x$n, ", alpha ", x$alpha, ", beta ", x$beta, ".\n", sep="")
+}
+
+plot.betabinomial <- function(x, ...) {
+   plot(0:x$n, probability(x, 0:x$n), xlab="", ylab="")
+}
+
+summary.betabinomial <- function(object, ...) {
+   cat("A Betabinomial probability distribution.\n")
+   cat("n ", object$n, ", alpha ", object$alpha, ", beta ", object$beta, ".\n", sep="")
+}
+
+simulate.betabinomial <- function(object, nsim = 1, ...) {
+   simulate(binomialbeta(object$n, object$alpha, object$beta), nsim)[,2]
+}
+
+##################################
+## CLASS binomialbeta
+##################################
+# this is the bivariate distribution combining the binomial with the beta
+
+binomialbeta <- function(n, alpha, beta) {
+      result <- list(n=n, alpha=alpha, beta=beta)
+      class(result) <- c("binomialbeta", "probabilitydistribution")
+      result
+}
+
+#expectation.binomialbeta <- function(object) {
+#   object$n*object$alpha/(object$alpha + object$beta)
+#}
+
+#variance.binomialbeta <- function(object) {
+#   object$n*object$alpha*object$beta*(object$alpha+object$beta+object$n)/
+#   ((object$alpha + object$beta)^2*(object$alpha + object$beta + 1))
+#}
+
+#precision.binomialbeta <- function(object) {
+#   1/variance(object)
+#}
+
+#probability.binomialbeta <- function(object, val) {
+#   dbeta(val, object$alpha, object$beta)
+#}
+
+print.binomialbeta <- function(x, ...) {
+   cat("A Binomialbeta probability distribution.\n")
+   cat("n ", x$n, ", alpha ", x$alpha, ", beta ", x$beta, ".\n", sep="")
+}
+
+plot.binomialbeta <- function(x, onlybivariate=FALSE, switchaxes=FALSE, ...) {
+# The onlybivariate parameter can make the output consist of only the bivariate plot
+# The switchaxes parameter can make the axes switch, if the plot is only bivariate. 
+   if (onlybivariate) {
+      xx <- (1:999)/1000
+      betad <- dbeta(rep(xx, x$n + 1), x$alpha, x$beta)
+      yy <- 0:x$n
+      binomd <- dbinom(rep(0:x$n, each=999), x$n, rep(xx, x$n + 1))
+      zz <- matrix(betad*binomd, 999, x$n + 1 )
+      if (switchaxes) 
+      	 image(xx, yy, zz, xlab="", ylab="")
+      else
+	 image(yy ,xx, t(zz), xlab="", ylab="")
+   } else {
+      old.par <- par(no.readonly = TRUE); on.exit(par(old.par))
+      par(mfcol=c(2,2))
+      plot(marginal(x, 1))
+      plot(x, TRUE, TRUE)
+      plot(x, TRUE, FALSE)
+      plot(marginal(x, 2))
+   }
+}
+
+summary.binomialbeta <- function(object, ...) {
+   cat("A Binomialbeta probability distribution.\n")
+   cat("n ", object$n, ", alpha ", object$alpha, ", beta ", object$beta, ".\n", sep="")
+}
+
+simulate.binomialbeta <- function(object, nsim = 1, ...) {
+   x <- rbeta(nsim, object$alpha, object$beta)
+   y <- rbinom(nsim, object$n, x)
+   cbind(x,y)
+}
+
+marginal.binomialbeta <- function(object, v) 
+{
+if (v==1) 
+   betadistribution(object$alpha, object$beta)
+else if (v==2)
+   betabinomial(object$n, object$alpha, object$beta)
+else
+   cat("ERROR: Wrong specification.\n")
+}
+
+conditional.binomialbeta <- function(object, v, val)
+{
+if (v==1) 
+   binomialdistribution(object$n, val)
+else if (v==2)
+   betadistribution(object$alpha + val, object$beta + object$n - val)
+else 
+   cat("ERROR: Wrong specification.\n")
 }
 
 ##################################
@@ -412,8 +764,10 @@ plot.uniformdistribution <- function(x, ...) {
    if ((x$b - x$a)==Inf)
       cat("The distribution is improper.\n")
    else {
-   plot(c(x$a,x$a,x$b,x$b), 
-   c(0, 1/(x$b-x$a), 1/(x$b-x$a), 0), type="l", xlab="", ylab="")
+      xmin <- x$a - 0.1*(x$b-x$a)
+      xmax <- x$b + 0.1*(x$b-x$a)
+      plot(c(xmin, x$a,x$a,x$b,x$b, xmax), 
+      c(0, 0, 1/(x$b-x$a), 1/(x$b-x$a), 0, 0), type="l", xlab="", ylab="")
 }
 }
 
@@ -425,6 +779,105 @@ simulate.uniformdistribution <- function(object, nsim = 1, ...) {
    runif(nsim, object$a, object$b)
 }
 
+compose.uniformdistribution <- function(object, type, ...) {
+# NOTE: This must be re-written as the number of types expands...
+   if (type!="binomialdistribution") 
+      cat("ERROR: Not implemented for this type.\n")
+   else if (object$a != 0 | object$b != 1)
+      cat("ERROR: The uniform distribution must be on the interval from 0 to 1.\n")
+   else {
+      args <- list(...)
+      binomialbeta(args[[1]], 1, 1)
+   }
+}
+
+##################################
+## CLASS muniformdistribution 
+##################################
+
+muniformdistribution <- function(startvec, stopvec) {
+   if (any(startvec>=stopvec)) 
+      cat("ERROR: The lower limit must be smaller than the upper limit.\n")
+   else {
+      result <- list(a=startvec, b=stopvec)
+      class(result) <- c("muniformdistribution", "probabilitydistribution")
+      result
+   }
+}
+
+expectation.muniformdistribution <- function(object) {
+   (object$a+object$b)/2
+}
+
+variance.muniformdistribution <- function(object) {
+   diag((object$b-object$a)^2/12)
+}
+
+precision.muniformdistribution <- function(object) {
+   diag(12/(object$b-object$a)^2)
+}
+
+probabilitydensity.muniformdistribution <- function(object, val, log=FALSE, normalize=TRUE) {
+   if (any(val < object$a) | any(val > object$b))
+      ifelse(log, log(0), 0) 
+   else if (normalize)
+      ifelse(log, -sum(log(object$b-object$a)), 1/prod(object$b-object$a))
+   else 
+      ifelse(log, 0, 1)
+}
+
+print.muniformdistribution <- function(x, ...) {
+   cat("A Multivariate uniform probability distribution on intervals\n")
+   outp <- cbind(x$a, x$b)
+   colnames(outp) <- c("start", "stop")
+   rownames(outp) <- NULL
+   print(outp)
+}
+
+plot.muniformdistribution <- function(x, onlybivariate=FALSE, ...) {
+   if (any((x$b - x$a)==Inf))
+      cat("The distribution is improper.\n")
+   else if (onlybivariate & length(x$a)==2) {
+      xmin <- x$a - 0.1*(x$b-x$a)
+      xmax <- x$b + 0.1*(x$b-x$a)
+      plot(rbind(xmin, xmax), xlab="", ylab="", type="n")
+      lines(matrix(c(x$a[1], x$a[1], x$b[1], x$b[1], x$a[1], x$a[2], x$b[2], x$b[2], x$a[2], x$a[2]), 5, 2))
+   } else {
+      k <- length(x$a)
+      old.par <- par(no.readonly = TRUE); on.exit(par(old.par))
+      par(mfcol=c(k,k))
+      for (i in 1:k) for (j in 1:k) 
+         if (i==j) plot(marginal(x, i))
+         else plot(marginal(x, c(i,j)), TRUE)
+   }
+}
+
+summary.muniformdistribution <- function(object, ...) {
+   print(object)
+}
+
+simulate.muniformdistribution <- function(object, nsim = 1, ...) {
+   matrix(runif(nsim*length(object$a), object$a, object$b), nsim, length(object$a), byrow=TRUE)
+}
+
+marginal.muniformdistribution <- function(object, v) { 
+   # v gives the indices for the dimensions which should be kept. 
+   if (length(v)==1)
+      uniformdistribution(object$a[v], object$b[v])
+   else
+      muniformdistribution(object$a[v], object$b[v])
+}
+
+conditional.muniformdistribution <- function(object, v, val) {
+# v gives the indices for the dimensions whose values should be fixed, and the 
+# fixed values are given by val. 
+   a <- object$a[-v]
+   b <- object$b[-v]
+   if (length(a)==1)
+      uniformdistribution(a,b)
+   else
+      muniformdistribution(a,b)
+}
 
 ##################################
 ## CLASS normal 
@@ -578,13 +1031,13 @@ else
 
 mnormal <- function(expectation = c(0,0), P = diag(length(expectation))) {
    if (dim(P)[1]!=length(expectation))
-      cat("ERROR in specification\n")
+      cat("ERROR in specification.\n")
    else if (dim(P)[2]!=length(expectation))
-      cat("ERROR in specification\n")
+      cat("ERROR in specification.\n")
    else if (any(t(P)!=P)) 
-      cat("ERROR: The precision matrix must be symmetric.")
+      cat("ERROR: The precision matrix must be symmetric.\n")
    else if (min(eigen(P)$values)<0)
-      cat("ERROR: The precision matrix must be non-negative definite.")
+      cat("ERROR: The precision matrix must be non-negative definite.\n")
    else {
       result <- list(expectation=expectation, P=P)
       class(result) <- c("mnormal", "probabilitydistribution")
@@ -597,16 +1050,17 @@ object$expectation
 }
 
 variance.mnormal <- function(object) {
-result <- solve(object$P)
-0.5*(result + t(result))
+   if (det(object$P)==0) cat("WARNING: The variance is infinite.\n")
+   result <- ginv(object$P)
+   0.5*(result + t(result))
 }
 
 precision.mnormal <- function(object) {
-object$P
+   object$P
 }
 
-marginal.mnormal <- function(object, v) {
-# v gives the indices for the dimensions which should be kept. 
+marginal.mnormal <- function(object, v) { 
+   # v gives the indices for the dimensions which should be kept. 
    k <- length(object$expectation)
    v <- as.integer(v)
    if (any(duplicated(v)))
@@ -615,15 +1069,16 @@ marginal.mnormal <- function(object, v) {
       cat("ERROR: Too large index.\n")
    else if (min(v)<1)
       cat("ERROR: Too small index.\n")
+   else if (length(v)==k) {
+      # permute the indices
+      object$expectation <- object$expectation[v]
+      object$P <- object$P[v,v]
+      object
+   }
    else {
       object$expectation <- object$expectation[v]
-      if (length(v)==k) 
-         object$P <- object$P[v,v]
-      else {
-         object$P   <- object$P[v,v] - 
-            object$P[v,-v] %*% solve(object$P[-v,-v]) %*% object$P[-v, v]
-         object$P <- 0.5*(object$P + t(object$P))
-      }
+      object$P   <- object$P[v,v] - object$P[v,-v] %*% ginv(object$P[-v,-v]) %*% object$P[-v, v]
+          object$P <- 0.5*(object$P + t(object$P))
       if (length(object$expectation)==1)
          class(object)[1] <- "normal"
       object
@@ -634,7 +1089,6 @@ conditional.mnormal <- function(object, v, val) {
 # v gives the indices for the dimensions whose values should be fixed, and the 
 # fixed values are given by val. 
    k <- length(object$expectation)
-#   if (missing(v)) v <- 1:(length(val))
    v <- as.integer(v)
    if (any(duplicated(v)))
       cat("ERROR: Duplicated indices not allowed.\n")
@@ -642,10 +1096,12 @@ conditional.mnormal <- function(object, v, val) {
       cat("ERROR: Too large index.\n")
    else if (min(v)<1)
       cat("ERROR: Too small index.\n")
+   else if (length(v)==k)
+      cat("ERROR: Cannot condition all variables.\n")
    else if (length(val)!=length(v))
-      cat("ERROR: The number of values must be equal to the number of indices.\n")
+      cat("ERROR: The length of the val vector must be equal to the number of indices.\n")
    else {
-	object$expectation <- object$expectation - solve(object$P[-v,-v])%*%
+	object$expectation <- object$expectation - ginv(object$P[-v,-v])%*%
 		object$P[-v,v]%*%(val-object$expectation[v])
 	object$P <- object$P[-v,-v]
         if (length(object$expectation)==1)
@@ -668,12 +1124,16 @@ print(x$P)
 
 plot.mnormal <- function(x, onlybivariate=FALSE, ...) {
    if (onlybivariate & length(x$expectation)==2) {
-      A <- marginal(x, 1)
-      B <- marginal(x, 2)
-      startA <- qnorm(0.001, A$expectation, 1/sqrt(A$P))
-      stopA  <- qnorm(0.999, A$expectation, 1/sqrt(A$P))
-      startB <- qnorm(0.001, B$expectation, 1/sqrt(B$P))
-      stopB  <- qnorm(0.999, B$expectation, 1/sqrt(B$P))
+      # To plot improper distributions reasonably: 
+      Ptmp <- eigen(x$P)
+      v <- ifelse(Ptmp$values, Ptmp$values, 1)
+      Pnew <- Ptmp$vectors%*%diag(v)%*%t(Ptmp$vectors)
+      st1 <- sqrt(Pnew[1,1]-Pnew[1,2]*Pnew[2,1]/Pnew[2,2])
+      st2 <- sqrt(Pnew[2,2]-Pnew[2,1]*Pnew[1,2]/Pnew[1,1])
+      startA <- x$expectation[1] - 3/st1
+      stopA  <- x$expectation[1] + 3/st1
+      startB <- x$expectation[2] - 3/st2
+      stopB  <- x$expectation[2] + 3/st2
       logf <- function(X, ...) {
          -0.5*(X-x$expectation)%*%x$P%*%(X-x$expectation)
       }
@@ -731,9 +1191,6 @@ linearpredict.mnormal <- function(object, X = rep(1,length(object$expectation)),
 p.value.mnormal <- function(object, point=0) {
 # For any distribution, this should return the probability outside the 
 # credibility region with boundary containing the origin. 
-if (any(eigen(object$P)$values==0)) 
-    1 
-else
     if (sum(point*point)==0) point <- rep(0, length(object$expectation))
     pchisq((object$expectation-point)%*%object$P%*%(object$expectation-point) ,
 		length(object$expectation), lower.tail=FALSE)
@@ -1244,10 +1701,14 @@ if (missing(P) & missing(alpha) & missing(beta)) {
    result
 }
 else {
-   if (missing(P)) P <- diag(length(mu))    
-   result <- list(mu = mu, P = P, alpha=alpha, beta=beta)
-   class(result) <- c("mnormalgamma", "probabilitydistribution")
-   result
+   if (missing(P)) P <- diag(length(mu))
+   if (any(eigen(P)$values<0)) 
+      cat("ERROR: Illegal value for parameter P.\n")
+   else {    
+      result <- list(mu = mu, P = P, alpha=alpha, beta=beta)
+      class(result) <- c("mnormalgamma", "probabilitydistribution")
+      result
+   }
 }
 }
 
@@ -1261,7 +1722,7 @@ expectation.mnormalgamma <- function(object) {
 variance.mnormalgamma <- function(object, ...) {
    k <- length(object$mu)
    result <- matrix(0, k+1, k+1)
-   result[1:k,1:k] <- object$beta/(object$alpha-1)*solve(object$P)
+   result[1:k,1:k] <- object$beta/(object$alpha-1)*ginv(object$P)
    result[k+1,k+1] <- object$alpha/object$beta^2
    result <- 0.5*(result + t(result))
    result
@@ -1276,7 +1737,7 @@ precision.mnormalgamma <- function(object, ...) {
 }
 
 marginal.mnormalgamma <- function(object, v) {
-# v gives the indices for the dimensions which should be kept. 
+   # v gives the indices for the dimensions which should be kept. 
    k <- length(object$mu)
    v <- as.integer(v)
    if (any(duplicated(v)))
@@ -1295,7 +1756,7 @@ marginal.mnormalgamma <- function(object, v) {
          if (length(w)==k)
             object$P <- object$P[w,w]
          else {
-            object$P <- object$P[w,w] - object$P[w,-w]%*%solve(object$P[-w,-w])%*%object$P[-w,w]
+            object$P <- object$P[w,w] - object$P[w,-w]%*%ginv(object$P[-w,-w])%*%object$P[-w,w]
             object$P <- 0.5*(object$P + t(object$P))
          }
          if (KeepGamma) {
@@ -1346,9 +1807,9 @@ conditional.mnormalgamma <- function(object, v, val) {
       gammadistribution(object$alpha + k/2, object$beta + 
          0.5*(val-object$mu)%*%object$P%*%(val-object$mu))
    } else {
-      newexp <- as.vector(object$mu[-v] - solve(object$P[-v,-v])%*%object$P[-v,v]%*%(val - object$mu[v]))
+      newexp <- as.vector(object$mu[-v] - ginv(object$P[-v,-v])%*%object$P[-v,v]%*%(val - object$mu[v]))
       newbeta <- object$beta + 0.5*(val - object$mu[v])%*%
-         (object$P[v,v]-object$P[v,-v]%*%solve(object$P[-v,-v])%*%object$P[-v,v])%*%
+         (object$P[v,v]-object$P[v,-v]%*%ginv(object$P[-v,-v])%*%object$P[-v,v])%*%
          (val - object$mu[v])
       if (length(newexp)>1) {
          object$mu <- newexp
@@ -1435,7 +1896,7 @@ contrast.mnormalgamma <- function(object, v) {
    if (length(object$mu)!=length(v))
       cat("ERROR: Wrong length of the input vector.\n")
    else 
-      normalgamma(sum(v*object$mu), 0.5*log(as.vector(v%*%solve(object$P)%*%v)), object$alpha, object$beta)
+      normalgamma(sum(v*object$mu), 0.5*log(as.vector(v%*%ginv(object$P)%*%v)), object$alpha, object$beta)
 }
 
 ##################################
@@ -1502,7 +1963,7 @@ marginal.mnormalexpgamma <- function(object, v) {
          if (length(w)==k)
             object$P <- object$P[w,w]
          else {
-            object$P <- object$P[w,w] - object$P[w,-w]%*%solve(object$P[-w,-w])%*%object$P[-w,w]
+            object$P <- object$P[w,w] - object$P[w,-w]%*%ginv(object$P[-w,-w])%*%object$P[-w,w]
             object$P <- 0.5*(object$P + t(object$P))
          }
          if (KeepGamma) {
@@ -1554,9 +2015,9 @@ conditional.mnormalexpgamma <- function(object, v, val) {
       expgamma(object$alpha + k/2, object$beta + 
          0.5*(val-object$mu)%*%object$P%*%(val-object$mu), -2)
    } else {
-      newexp <- as.vector(object$mu[-v] - solve(object$P[-v,-v])%*%object$P[-v,v]%*%(val - object$mu[v]))
+      newexp <- as.vector(object$mu[-v] - ginv(object$P[-v,-v])%*%object$P[-v,v]%*%(val - object$mu[v]))
       newbeta <- object$beta + 0.5*(val - object$mu[v])%*%
-         (object$P[v,v]-object$P[v,-v]%*%solve(object$P[-v,-v])%*%object$P[-v,v])%*%
+         (object$P[v,v]-object$P[v,-v]%*%ginv(object$P[-v,-v])%*%object$P[-v,v])%*%
          (val - object$mu[v])
       if (length(newexp)>1) {
          object$mu <- newexp
@@ -1610,7 +2071,7 @@ print(object)
 simulate.mnormalexpgamma <- function(object, nsim=1, ...) {
    tau <- rgamma(nsim, object$alpha, object$beta)
    k   <- length(object$mu)
-   X   <- matrix(rnorm(nsim * k), nsim, k) %*% chol(solve(object$P))
+   X   <- matrix(rnorm(nsim * k), nsim, k) %*% chol(ginv(object$P))
    X   <- X * matrix(rep(1/sqrt(tau),k), nsim, k)
    X   <- X + matrix(object$mu, nsim, k, byrow=TRUE)
    cbind(X, -0.5*log(tau))
@@ -1643,7 +2104,7 @@ contrast.mnormalexpgamma <- function(object, v) {
    if (length(object$mu)!=length(v))
       cat("ERROR: Wrong length of the input vector.\n")
    else 
-      normalexpgamma(sum(v*object$mu), 0.5*log(as.vector(v%*%solve(object$P)%*%v)), object$alpha, object$beta)
+      normalexpgamma(sum(v*object$mu), 0.5*log(as.vector(v%*%ginv(object$P)%*%v)), object$alpha, object$beta)
 }
 
 ##################################
@@ -1654,13 +2115,13 @@ contrast.mnormalexpgamma <- function(object, v) {
 # degreesoffreedom
 # P
 
-tdistribution <- function(expectation=0, degreesoffreedom = 10000, lambda, P = 1) {
+tdistribution <- function(expectation=0, degreesoffreedom = 1e20, lambda, P = 1) {
 if (!missing(lambda) & !missing(P))
    cat("ERROR: Cannot specify both logged scale and P at the same time.")
 else if (degreesoffreedom < 1) 
   cat("ERROR: The degrees of freedom must be at least 1.\n") 
-else if (P <= 0 )
-  cat("ERROR: The P parameter must be positive.\n")
+else if (P < 0 )
+  cat("ERROR: The P parameter cannot be negative.\n")
 else {
    if (!missing(lambda)) P <- exp(-2*lambda)
 result <- list(expectation=as.vector(expectation), degreesoffreedom=degreesoffreedom, P=as.vector(P))
@@ -1689,7 +2150,7 @@ else
 }
 
 probabilitydensity.tdistribution <- function(object, val, log=FALSE, normalize=TRUE) {
-   dt((val - object$expectation)*sqrt(object$P), object$degreesoffredom, log=log)
+   dt((val - object$expectation)*sqrt(object$P), object$degreesoffreedom, log=log)
 }
 
 cdf.tdistribution <- function(object, val) {
@@ -1713,9 +2174,13 @@ plot.tdistribution <- function(x, ...) {
    start <- qt(0.001, x$degreesoffreedom)
    stop  <- qt(0.999, x$degreesoffreedom)
    xx    <- seq(start, stop, length=1001)
-   y     <- dt(xx, x$degreesoffreedom)
-   xx    <- xx/sqrt(x$P) + x$expectation
-   plot(xx, y, xlab = "", ylab="", type="l")
+   if (x$P==0) {
+      plot(xx, rep(1,1001), xlab = "", ylab="", type="l")
+   } else {
+      y     <- dt(xx, x$degreesoffreedom)
+      xx    <- xx/sqrt(x$P) + x$expectation
+      plot(xx, y, xlab = "", ylab="", type="l")
+   }
 }
 
 summary.tdistribution <- function(object, ...) {
@@ -1724,7 +2189,7 @@ if (object$degreesoffreedom>2)
    cat("Variance ", object$degreesoffreedom/(object$degreesoffreedom-2)/object$P, "\n")
 else
    cat("This distribution has no variance.\n")
-cat("Mode ", object$expectation)
+cat("Mode ", object$expectation, "\n")
 }
 
 simulate.tdistribution <- function(object, nsim = 1, ...) {
@@ -1787,7 +2252,7 @@ expectation.mtdistribution <- function(object) {
 }
 
 variance.mtdistribution <- function(object) {
-   result <- rep(object$degreesoffreedom/(object$degreesoffreedom-2), prod(dim(object$P)))*solve(object$P)
+   result <- rep(object$degreesoffreedom/(object$degreesoffreedom-2), prod(dim(object$P)))*ginv(object$P)
    0.5*(result + t(result))
 }   
 
@@ -1810,7 +2275,7 @@ marginal.mtdistribution <- function(object, v) {
       if (length(v)==k)
          object$P  <- object$P[v,v]
       else {
-         object$P  <- object$P[v,v] - object$P[v,-v]%*%solve(object$P[-v,-v])%*%object$P[-v,v]  
+         object$P  <- object$P[v,v] - object$P[v,-v]%*%ginv(object$P[-v,-v])%*%object$P[-v,v]  
          object$P <- 0.5*(object$P + t(object$P))
       }    
       if (length(object$expectation)==1)
@@ -1843,10 +2308,10 @@ conditional.mtdistribution <- function(object, v, val) {
    else if (length(val)!=length(v))
       cat("ERROR: The number of values must be equal to the number of indices.\n")
    else {
-      newexp <- object$expectation[-v] - solve(object$P[-v,-v])%*%object$P[-v,v]%*%(val - object[v])
+      newexp <- object$expectation[-v] - ginv(object$P[-v,-v])%*%object$P[-v,v]%*%(val - object[v])
       newPfactor <- object$degreesoffreedom/(object$degreesoffreedom + 
          (val - object$expectation[v])%*%
-         (object$P[v,v]-object$P[v,-v]%*%solve(object$P[-v,-v])%*%object$P[-v,v])%*%
+         (object$P[v,v]-object$P[v,-v]%*%ginv(object$P[-v,-v])%*%object$P[-v,v])%*%
          (val - object$expectation[v]))
       object$P <- object$P[-v,-v]
       object$P <- rep(newPfactor, prod(dim(object$P)))*object$P
@@ -1878,12 +2343,24 @@ cat("Parameter proportional to precision ", x$P, "\n")
 
 plot.mtdistribution <- function(x, onlybivariate=FALSE, ...) {
    if (onlybivariate & length(x$expectation)==2) {
-      A <- marginal(x, 1)
-      B <- marginal(x, 2)
-      startA <- qt(0.001, A$degreesoffreedom)/sqrt(A$P)+A$expectation
-      stopA  <- qt(0.999, A$degreesoffreedom)/sqrt(A$P)+A$expectation
-      startB <- qt(0.001, B$degreesoffreedom)/sqrt(B$P)+B$expectation
-      stopB  <- qt(0.999, B$degreesoffreedom)/sqrt(B$P)+B$expectation
+      # To plot improper distributions reasonably: 
+      Ptmp <- eigen(x$P)
+      v <- ifelse(Ptmp$values, Ptmp$values, 1)
+      Pnew <- Ptmp$vectors%*%diag(v)%*%t(Ptmp$vectors)
+      st1 <- sqrt(Pnew[1,1]-Pnew[1,2]*Pnew[2,1]/Pnew[2,2])
+      st2 <- sqrt(Pnew[2,2]-Pnew[2,1]*Pnew[1,2]/Pnew[1,1])
+      fxt    <- qt(0.999, x$degreesoffreedom)
+      startA <- x$expectation[1] - fxt/st1
+      stopA  <- x$expectation[1] + fxt/st1
+      startB <- x$expectation[2] - fxt/st2
+      stopB  <- x$expectation[2] + fxt/st2
+#
+#      A <- marginal(x, 1)
+#      B <- marginal(x, 2)
+#      startA <- qt(0.001, A$degreesoffreedom)/sqrt(A$P)+A$expectation
+#      stopA  <- qt(0.999, A$degreesoffreedom)/sqrt(A$P)+A$expectation
+#      startB <- qt(0.001, B$degreesoffreedom)/sqrt(B$P)+B$expectation
+#      stopB  <- qt(0.999, B$degreesoffreedom)/sqrt(B$P)+B$expectation
       logf <- function(xx, ...) {
          -(x$degreesoffreedom + 2)/2*log(x$degreesoffreedom + (xx-x$expectation) %*%
                  x$P %*% (xx-x$expectation))
@@ -2015,6 +2492,160 @@ c(qf((1-prob)/2, object$df1, object$df2),
 }
 
 
+##################################
+## CLASS wishart
+##################################
+# Data: 
+# S: symmetric non-negative definite matrix. 
+# df: degrees of freedom
+
+wishart <- function(S = diag(2), df = 1) {
+   if (any(t(S)!=S)) 
+      cat("ERROR: The S matrix must be symmetric.\n")
+   else if (min(eigen(S)$values)<0)
+      cat("ERROR: The S matrix must be non-negative definite.\n")
+   else if (df < 0) 
+      cat("ERROR: The degrees of freedom cannot be negative.\n")
+   else {
+      result <- list(S = S, df = df)
+      class(result) <- c("wishart", "probabilitydistribution")
+      result
+   }
+}
+
+expectation.wishart <- function(object) {
+   object$df*ginv(object$S)
+}
+
+variance.wishart <- function(object) {
+   cat("Not implemented yet.\n")
+}
+
+precision.wishart <- function(object) {
+   cat("Not implemented yet.\n")
+}
+
+marginal.wishart <- function(object, v) { 
+   # v gives the indices for the dimensions which should be kept. 
+   k <- dim(object$S)[1]
+   v <- as.integer(v)
+   if (any(duplicated(v)))
+      cat("ERROR: Duplicated indices not allowed.\n")
+   else if (max(v)>k)
+      cat("ERROR: Too large index.\n")
+   else if (min(v)<1)
+      cat("ERROR: Too small index.\n")
+   else if (length(v)==k) {
+      # permute the indices
+      object$S <- object$S[v,v]
+      object
+   }
+   else {
+      object$S   <- object$S[v,v] - object$S[v,-v] %*% ginv(object$S[-v,-v]) %*% object$S[-v, v]
+          object$S <- 0.5*(object$S + t(object$S))
+      if (length(object$S)==1)
+         gammadistribution(object$df/2, object$S/2)
+      else 
+         object
+   }
+}
+
+conditional.wishart <- function(object, v, val) {
+# v gives the indices for the dimensions whose values should be fixed, and the 
+# fixed values are given by val. 
+   cat("Not implemented yet.\n")
+}
+
+probabilitydensity.wishart <- function(object, val, log=FALSE, normalize=TRUE) {
+   k <- dim(object$S)[1]
+   result <- det(val)^((object$df - k - 1)/2)*exp(-sum(diag(object$S%*%val))/2)
+   if (normalize) 
+      result <- result/(2^(object$df*k/2)*pi^(k*(k-1)/4)*prod(gamma((object*df + 1 - (1:k))/2)))
+   ifelse(log, log(result), result)
+}
+
+print.wishart <- function(x, ...) {
+cat("A Wishart probability distribution.\n")
+cat("Degrees of freedom: ", x$df, "\n")
+cat("S matrix:\n")
+print(x$S) 
+}
+
+plot.wishart <- function(x, onlybivariate=FALSE, ...) {
+   if (onlybivariate & length(x$expectation)==2) {
+      # To plot improper distributions reasonably: 
+      # we need to fill in code here. For now, assume that 
+      # S is positive definite. 
+      k <- dim(x$S)[1]
+      A <- marginal(x, 1)
+      B <- marginal(x, 2)
+      startA <- invcdf(A, 0.001)
+      stopA  <- invcdf(A, 0.999)
+      startB <- invcdf(B, 0.001)
+      stopB  <- invcdf(B, 0.999)
+      logf <- function(X, ...) {
+         0.5*(x$df - k - 1)*log(det(X)) - 0.5*sum(diag(x$S%*%X))
+      }
+      densitycontour(logf, c(startA, stopA, startB, stopB), data=0)
+   } else {
+      k <- dim(x$S)[1]
+      old.par <- par(no.readonly = TRUE); on.exit(par(old.par))
+      par(mfcol=c(k,k))
+      for (i in 1:k) for (j in 1:k) 
+         if (i==j) plot(marginal(x, i))
+         else plot(marginal(x, c(i,j)), TRUE)
+   }
+}
+
+summary.wishart <- function(object, ...) {
+print(object)
+}
+
+
+
+
+#To do: BELOW
+
+
+simulate.wishart <- function(object, nsim = 1, ...) {
+	if (det(object$P)==0) {
+		cat("ERROR: Cannot simulate from improper distribution")
+	} else {
+		k <- length(object$expectation)
+		B <- matrix(rnorm(nsim*k), nsim, k)%*%chol(solve(object$P))
+		B + matrix(object$expectation, nsim, k, byrow=TRUE)
+	}
+}
+
+linearpredict.wishart <- function(object, X = rep(1,length(object$expectation)), PP = diag(length(X)/length(object$expectation)), ...) {
+   if (is.matrix(X) && dim(X)[2] != length(object$expectation))
+      cat("ERROR: X has wrong number of columns.\n")
+   else if (!is.matrix(X) && length(X) != length(object$expectation))
+      cat("ERROR: X has wrong length.\n")
+   else if (dim(PP)[1] != length(X)/length(object$expectation) | dim(PP)[2] != length(X)/length(object$expectation))
+      cat("ERROR: P as wrong format.\n")
+   else {
+      k <- length(object$expectation)
+      s <- length(X)/k
+      X <- matrix(X, s, k)
+      expectation <- c(X%*%object$expectation, object$expectation)
+      P   <- matrix(NA, s+k, s+k)
+      P[1:s,1:s] <- PP
+      P[1:s,s+(1:k)] <- -PP%*%X
+      P[s+(1:k),1:s] <- -t(PP%*%X)
+      P[s+(1:k),s+(1:k)] <- t(X)%*%PP%*%X + object$P
+      result <- list(expectation=expectation, P=P)
+      class(result) <- c("mnormal", "probabilitydistribution")
+      result
+   }
+}
+
+
+
+
+
+
+
 
 
 ####################################################################
@@ -2123,13 +2754,21 @@ designFactorial <- function(nfactors, replications = 1, interactions = FALSE) {
 ######################################################################
 # Special functions: 
 
+flat <- function(k) {
+# Produces a flat uniform distribution of dimension k
+if (k==1) 
+   uniformdistribution(-Inf, Inf)
+else 
+   muniformdistribution(rep(-Inf, k), rep(Inf, k))
+}
+
 linearmodel <- function(data, design) {
 if (length(data)!=dim(design)[1]) 
    cat("ERROR: The design matrix has wrong format.\n")
 else {
 result <- list()
 result$P <- t(design)%*%design
-result$mu <- solve(result$P) %*% t(design) %*% data
+result$mu <- ginv(result$P) %*% t(design) %*% data
 n <- dim(design)[1]
 k <- dim(design)[2]
 result$alpha <- (n-k)/2
@@ -2140,6 +2779,14 @@ else
    class(result) <- c("normalexpgamma", "probabilitydistribution")
 result
 }
+}
+
+posteriornormal1 <- function(data) {
+   linearmodel(data, designOneGroup(length(data)))
+}
+
+posteriornormal2 <- function(data1, data2) {
+   marginal(linearmodel(c(data1, data2), designTwoGroups(length(data1), length(data2))), 2:3)
 }
 
 anovatable <- function(data, design, subdivisions=c(1, dim(design)[2]-1)) {
@@ -2172,14 +2819,14 @@ leastsquares <- function(data, design) {
 if (length(data)!=dim(design)[1]) 
    cat("ERROR: The design matrix has wrong format.\n")
 else 
-   as.vector(solve(t(design)%*%design)%*%t(design)%*%data)
+   as.vector(ginv(t(design)%*%design)%*%t(design)%*%data)
 }
 
 fittedvalues <- function(data, design) {
 if (length(data)!=dim(design)[1]) 
    cat("ERROR: The design matrix has wrong format.\n")
 else 
-   as.vector(design%*%solve(t(design)%*%design)%*%t(design)%*%data)
+   as.vector(design%*%ginv(t(design)%*%design)%*%t(design)%*%data)
 }
 
 densitycontour <- function (logf, limits, data, ...) 
@@ -2203,7 +2850,7 @@ densitycontour <- function (logf, limits, data, ...)
     Z = LOGF(cbind(X[1:n2], Y[1:n2]), data)
     Z = Z - max(Z)
     Z = matrix(Z, c(ng, ng))
-    contour(x0, y0, Z, levels = seq(-6.9, 0, by = 2.3), labels = "", lwd = 2, 
+    contour(x0, y0, Z, levels = seq(-6.9, 0, by = 2.3), drawlabels=FALSE, lwd = 2, 
         ...)
 }
 

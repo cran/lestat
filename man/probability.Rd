@@ -1,8 +1,10 @@
 \name{probability}
 \alias{probability}
+\alias{probability.betabinomial}
 \alias{probability.binomialdistribution}
 \alias{probability.default}
 \alias{probability.discretedistribution}
+\alias{probability.mdiscretedistribution}
 \alias{probability.poissondistribution}
 \title{
 The Probability at a Value for a Discrete Distribution

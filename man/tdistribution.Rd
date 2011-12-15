@@ -7,7 +7,7 @@ A t-distribution
 Create an object representing a univariate non-centered t-distribution. 
 }
 \usage{
-tdistribution(expectation = 0, degreesoffreedom = 10000, lambda, P = 1)
+tdistribution(expectation = 0, degreesoffreedom = 1e+20, lambda, P = 1)
 }
 \arguments{
   \item{expectation}{

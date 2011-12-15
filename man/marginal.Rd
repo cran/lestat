@@ -1,10 +1,13 @@
 \name{marginal}
 \alias{marginal}
 \alias{marginal.default}
+\alias{marginal.binomialbeta}
+\alias{marginal.mdiscretedistribution}
 \alias{marginal.mnormalexpgamma}
 \alias{marginal.mnormalgamma}
 \alias{marginal.mnormal}
 \alias{marginal.mtdistribution}
+\alias{marginal.muniformdistribution}
 \alias{marginal.normalexpgamma}
 \alias{marginal.normalgamma}
 \title{

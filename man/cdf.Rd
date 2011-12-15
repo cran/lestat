@@ -1,5 +1,7 @@
 \name{cdf}
 \alias{cdf}
+\alias{cdf.betabinomial}
+\alias{cdf.betadistribution}
 \alias{cdf.binomialdistribution}
 \alias{cdf.default}
 \alias{cdf.discretedistribution}
