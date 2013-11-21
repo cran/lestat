@@ -500,6 +500,119 @@ simulate.betadistribution <- function(object, nsim = 1, ...) {
    rbeta(nsim, object$alpha, object$beta)
 }
 
+credibilityinterval.betadistribution <- function (object, prob = 0.95) 
+{
+    c(qbeta((1 - prob)/2, object$alpha, object$beta), 
+        qbeta(1 - (1 - prob)/2, object$alpha, object$beta))
+}
+
+##################################
+## CLASS multiomialdistribution 
+##################################
+# Data: 
+# count, probability
+# OPTIONAL: name: of the dimensions
+
+multinomialdistribution <- function(ntrials, probabilities) {
+   if (ntrials <1) 
+      cat("ERROR: The first parameter must be a positive integer.\n")
+   else if (any(probabilities < 0)) 
+      cat("ERROR: The probabilities cannot be smaller than zero.\n")
+   else if (sum(probabilities)==0)
+      cat("ERROR: The probabilities cannot all be zero.\n")
+   else {
+      result <- list(ntrials=ntrials, probabilities = probabilities/sum(probabilities))
+      class(result) <- c("multinomialdistribution", "probabilitydistribution")
+      result
+   }
+}
+
+expectation.multinomialdistribution <- function(object) {
+   object$ntrials*object$probabilities
+}
+
+variance.multinomialdistribution <- function(object) {
+   object$ntrials*(diag(object$probabilities) - outer(object$probabilities, object$probabilities))
+}
+
+probability.multinomialdistribution <- function(object, val) {
+   if (sum(val)==object$ntrials) 
+       dmultinom(val, object$ntrials, object$probabilities)
+   else 0
+}
+
+print.multinomialdistribution <- function(x, ...) {
+   cat("A Multinomial probability distribution.\n")
+   cat("Number of trials ", x$ntrials, ", probabilities ", x$probabilities, ".\n", sep="")
+}
+
+#plot.multinomialdistribution <- function(x, ...) {
+#   plot(0:x$ntrials, dbinom(0:x$ntrials, x$ntrials, x$probability), xlab="", ylab="")
+#}
+
+summary.multinomialdistribution <- function(object, ...) {
+   cat("A Multinomial probability distribution.\n")
+   cat("Number of trials ", object$ntrials, ", probabilities ", object$probabilities, ".\n", sep="")
+}
+
+simulate.multinomialdistribution <- function(object, nsim = 1, ...) {
+   rmultinom(nsim, object$ntrials, object$probability)
+}
+
+##################################
+## CLASS betadistribution
+##################################
+
+betadistribution <- function(alpha, beta) {
+      result <- list(alpha=alpha, beta=beta)
+      class(result) <- c("betadistribution", "probabilitydistribution")
+      result
+}
+
+expectation.betadistribution <- function(object) {
+   object$alpha/(object$alpha + object$beta)
+}
+
+variance.betadistribution <- function(object) {
+   object$alpha*object$beta/((object$alpha + object$beta)^2*(object$alpha + object$beta + 1))
+}
+
+precision.betadistribution <- function(object) {
+   1/variance(object)
+}
+
+probabilitydensity.betadistribution <- function(object, val, log=FALSE, normalize=TRUE) {
+   dbeta(val, object$alpha, object$beta)
+}
+
+cdf.betadistribution <- function(object, val) {
+   pbeta(val, object$alpha, object$beta)
+}
+
+invcdf.betadistribution <- function(object, val) {
+   qbinom(val, object$alpha, object$beta)
+}
+
+print.betadistribution <- function(x, ...) {
+   cat("A Beta probability distribution.\n")
+   cat("Alpha ", x$alpha, ", beta ", x$beta, ".\n", sep="")
+}
+
+plot.betadistribution <- function(x, ...) {
+   xx <- (1:999)/1000
+   plot(xx, dbeta(xx, x$alpha, x$beta), type="l", xlab="", ylab="")
+}
+
+summary.betadistribution <- function(object, ...) {
+   cat("A Beta probability distribution.\n")
+   cat("Alpha ", object$alpha, ", beta ", object$beta, ".\n", sep="")
+}
+
+simulate.betadistribution <- function(object, nsim = 1, ...) {
+   rbeta(nsim, object$alpha, object$beta)
+}
+
+
 ##################################
 ## CLASS betabinomial
 ##################################
@@ -935,7 +1048,7 @@ print.normal <- function(x, ...) {
 if (x$P > 0)
 {
 cat("A univariate Normal probability distribution.\n")
-cat("Expectation ", x$expectation, ", logged scale ", -0.5*log(x$P), ".\n", sep="")
+cat("Expectation ", x$expectation, ", logged scale ", -0.5*log(x$P), ", SD ", sqrt(1/x$P), ".\n", sep="")
 }
 else
 cat("A flat univariate Normal probability distribution.\n")
@@ -990,6 +1103,7 @@ cat("ERROR: The difference function is not implemented for this pair of objects.
 
 linearpredict.normal <- function(object, X = 1 , PP = diag(length(X)), ...) {
    s <- length(X)
+   if (s==1) PP <- matrix(PP, 1, 1)
    if (dim(PP)[1] != s | dim(PP)[2] != s) 
       cat("ERROR: P has wrong format.\n")
    else {
@@ -1020,6 +1134,16 @@ else
           lower.tail = (object$expectation > point))*2
 }
 
+compose.normal <- function (object, type, ...) 
+{
+    if (type != "normal") 
+        cat("ERROR: Not implemented for this type.\n")
+    else {
+        args <- list(...)
+        mnormal(c(object$expectation, object$expectation), 
+        matrix(c(object$P + args$P, -args$P, -args$P, args$P), 2, 2))
+    }
+}
 
 ##################################
 ## CLASS mnormal
@@ -1101,7 +1225,7 @@ conditional.mnormal <- function(object, v, val) {
    else if (length(val)!=length(v))
       cat("ERROR: The length of the val vector must be equal to the number of indices.\n")
    else {
-	object$expectation <- object$expectation - ginv(object$P[-v,-v])%*%
+	object$expectation <- object$expectation[-v] - ginv(object$P[-v,-v])%*%
 		object$P[-v,v]%*%(val-object$expectation[v])
 	object$P <- object$P[-v,-v]
         if (length(object$expectation)==1)
@@ -1303,15 +1427,15 @@ else {
 }
 
 expectation.expgamma <- function(object) {
-cat("Not implemented.\n")
+(digamma(object$alpha) - log(object$beta))/object$gamma
 }
 
 variance.expgamma <- function(object) {
-cat("Not implemented.\n")
+trigamma(object$alpha)/object$gamma^2
 }
 
 precision.expgamma <- function(object) {
-cat("Not implemented.\n")
+object$gamma^2/trigamma(object$alpha)
 }
 
 probabilitydensity.expgamma <- function(object, val, log=FALSE, normalize=TRUE) {
@@ -1548,15 +1672,15 @@ else {
 }
 
 expectation.normalexpgamma <- function(object) {
-cat("Not implemented yet.\n")
+c(expectation(marginal(object, 1)), expectation(marginal(object, 2)))
 }
 
 variance.normalexpgamma <- function(object) {
-cat("Not implemented yet.\n")
+diag(c(variance(marginal(object, 1)), variance(marginal(object, 2))))
 }
 
 precision.normalexpgamma <- function(object) {
-cat("Not implemented yet.\n")
+diag(c(precision(marginal(object, 1)), precision(marginal(object, 2))))
 }
 
 marginal.normalexpgamma <- function(object, v) {
@@ -1932,15 +2056,24 @@ else {
 ######################
 
 expectation.mnormalexpgamma <- function(object) {
-cat("Not implemented yet\n")
+k <- length(object$mu)
+c(object$mu, expectation(marginal(object, k+1)))
 }
 
 variance.mnormalexpgamma <- function(object, ...) {
-cat("Not implemented yet\n")
+k <- length(object$mu)
+result <- matrix(0, k+1, k+1)
+result[1:k,1:k] <- variance(marginal(object, 1:k))
+result[k+1,k+1] <- variance(marginal(object, k+1))
+result
 }
 
 precision.mnormalexpgamma <- function(object, ...) {
-cat("Not implemented yet\n")
+k <- length(object$mu)
+result <- matrix(0, k+1, k+1)
+result[1:k,1:k] <- precision(marginal(object, 1:k))
+result[k+1,k+1] <- precision(marginal(object, k+1))
+result
 }
 
 marginal.mnormalexpgamma <- function(object, v) {

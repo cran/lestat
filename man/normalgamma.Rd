@@ -42,8 +42,8 @@ A Normal-Gamma probability distribution.
 Petter Mostad <mostad@chalmers.se> 
 }
 \seealso{
-\code{\link{gamma}},\code{\link{normal}},\code{\link{expgamma}},\code{\link{normalexpgamma}},
-\code{\link{mnormal}},\code{\link{mnormalgamma}},\code{\link{mnormalexpgamma}}
+\code{\link{gamma}}, \code{\link{normal}}, \code{\link{expgamma}}, \code{\link{normalexpgamma}},
+\code{\link{mnormal}}, \code{\link{mnormalgamma}}, \code{\link{mnormalexpgamma}}
 }
 \examples{
 plot(normalgamma(3,4,5,6))

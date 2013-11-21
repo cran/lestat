@@ -44,7 +44,7 @@ Petter Mostad <mostad@chalmers.se>
 }
 \examples{
 prior <- normalexpgamma() #Generate a two-parameter flat prior
-full <- linearpredict(prior, rep(1, 7)) #Normal distribution with parameters
+full <- linearpredict(prior, rep(1, 7)) #Normal extension
 data <- simulate(uniformdistribution(), 7) #Generate data
 posterior <- conditional(full, 1:7, data) #Condition on parameters
 credibilityinterval(marginal(posterior, 1)) #Investigate posterior

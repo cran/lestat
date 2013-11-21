@@ -3,6 +3,7 @@
 \alias{compose.default}
 \alias{compose.discretedistribution}
 \alias{compose.uniformdistribution}
+\alias{compose.normal}
 \title{
 Building a new probability distribution from an old. 
 }
@@ -34,6 +35,7 @@ Petter Mostad <mostad@chalmers.se>
 }
 \examples{
 joint <- compose(uniformdistribution(), "binomialdistribution", 5)
-joint2 <- compose(discretedistribution(1:6), "discretedistribution", 1:6, matrix(c(1:36), 6, 6))
+joint2 <- compose(discretedistribution(1:6), "discretedistribution", 
+     1:6, matrix(c(1:36), 6, 6))
 }
 \keyword{compose}

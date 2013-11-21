@@ -6,6 +6,7 @@
 \alias{credibilityinterval.gammadistribution}
 \alias{credibilityinterval.normal}
 \alias{credibilityinterval.tdistribution}
+\alias{credibilityinterval.betadistribution}
 \title{
 Compute Credibility Interval for a Univariate Distribution
 }

@@ -7,7 +7,8 @@ A Multivariate t-Distribution
 Creates an object representing a multivariate non-centered t-distribution. 
 }
 \usage{
-mtdistribution(expectation = c(0,0), degreesoffreedom = 10000, P = diag(length(expectation)))
+mtdistribution(expectation = c(0,0), degreesoffreedom = 10000, 
+     P = diag(length(expectation)))
 }
 \arguments{
   \item{expectation}{
