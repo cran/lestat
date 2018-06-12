@@ -506,6 +506,16 @@ credibilityinterval.betadistribution <- function (object, prob = 0.95)
         qbeta(1 - (1 - prob)/2, object$alpha, object$beta))
 }
 
+compose.betadistribution <- function (object, type, ...)
+{
+    if (type != "binomialdistribution")
+        cat("ERROR: Not implemented for this type.\n")
+    else {
+        args <- list(...)
+        binomialbeta(args[[1]], object$alpha, object$beta)
+    }
+}
+
 ##################################
 ## CLASS multiomialdistribution 
 ##################################

@@ -4,9 +4,9 @@
 A Multivariate Normal-Gamma Distribution
 }
 \description{
-Creates an object representing a multivariate Normal-ExpGamma distribution. 
-If \eqn{(x,y)} has a multivariate Normal-ExpGamma 
-distribution, then the marginal distribution of \eqn{y} is an ExpGamma distribution, and the conditional 
+Creates an object representing a multivariate Normal-Gamma distribution. 
+If \eqn{(x,y)} has a multivariate Normal-Gamma 
+distribution, then the marginal distribution of \eqn{y} is an Gamma distribution, and the conditional 
 distribution of \eqn{x} given \eqn{y} is multivariate normal. 
 }
 \usage{

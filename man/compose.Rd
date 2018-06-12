@@ -3,6 +3,7 @@
 \alias{compose.default}
 \alias{compose.discretedistribution}
 \alias{compose.uniformdistribution}
+\alias{compose.betadistribution}
 \alias{compose.normal}
 \title{
 Building a new probability distribution from an old. 
